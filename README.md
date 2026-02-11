@@ -92,6 +92,17 @@ S.reliability(t)
 
 ## Visualization
 
+
+## Why Graphviz/pygraphviz is no longer required
+
+The project moved away from a hard Graphviz/pygraphviz requirement for day-to-day
+usage and testing:
+
+- Graphviz-based installs are fragile across environments (native binaries, headers, and PATH issues).
+- Reproducibility was inconsistent across platforms, especially Windows/conda setups.
+- For this project’s block-diagram needs, Graphviz introduced unnecessary operational overhead.
+- A lightweight Matplotlib block-style approach now covers the primary visualization workflow.
+
 `System.draw()` renders reliability block diagrams with Matplotlib.
 
 ```python
@@ -311,6 +322,26 @@ uv pip install -i https://test.pypi.org/simple --extra-index-url https://pypi.or
 
 
 ## Tests
+
+Install test dependencies (editable install):
+
+```bash
+pip install -e ".[test]"
+```
+
+Run with pytest:
+
+```bash
+pytest -q
+```
+
+Run with unittest discovery:
+
+```bash
+python -m unittest discover -s tests
+```
+
+Equivalent uv-based commands:
 
 ```bash
 uv run --extra test pytest -q

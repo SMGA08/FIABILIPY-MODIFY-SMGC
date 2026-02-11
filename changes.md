@@ -1,67 +1,106 @@
-# Changes made to fiabilipy (latest repo: fiabilipyg-2.8.1)
+# Change Log
 
-Goal: Modernize Python-2-era code to run on Python 3.9+ without changing public API or mathematical behavior, then repackage as a standalone `fiabilipym` distribution with a modern layout.
+## Background
+`fiabilipym` modernizes the original `fiabilipy` codebase for Python 3 while keeping the same reliability/availability mathematics and system-modeling API. As usage expanded across CI pipelines and mixed developer environments, Graphviz-based drawing became the main source of setup friction.
 
-## Summary of edits
+## Motivation
+### Why Graphviz / pygraphviz was removed
+The project removed the hard Graphviz/pygraphviz dependency from the default workflow for four practical reasons:
 
-- Python 2 to 3 compatibility fixes (mechanical only).
-- Package renamed and restructured into a standalone distribution.
-- Tests updated to run on Python 3 without `unittest2`.
-- Dependencies declared for visualization and numerical backends.
+1. **Installation fragility**
+   - `pygraphviz` frequently requires native Graphviz binaries and headers.
+   - Install success depends on system-level packages, compiler toolchains, and PATH configuration.
+   - This caused recurring build/install failures in lightweight or containerized environments.
 
-## File-by-file details (code compatibility)
+2. **Cross-platform reproducibility issues**
+   - Rendering and installation behavior varied across Linux/macOS/Windows.
+   - Windows and conda-based setups were especially inconsistent due to binary compatibility and linking differences.
+   - Teams saw “works on my machine” drift in diagram/test pipelines.
 
-### `src/fiabilipym/system.py`
-- Imported `reduce` from `functools` so the existing `reduce(...)` calls work in Python 3.
-- Replaced `collections.Iterable` with `collections.abc.Iterable` (Python 3 location).
-- Replaced `xrange(...)` with `range(...)` in code and doctest examples.
+3. **Overhead relative to project needs**
+   - For reliability block diagrams in this project, full Graphviz integration was more operational overhead than functional value.
+   - The dependency chain increased onboarding and CI maintenance costs.
 
-Why: `xrange` and `collections.Iterable` are Python 2-only; `reduce` moved to `functools` in Python 3.
+4. **Matplotlib-first replacement**
+   - Diagram generation now emphasizes a lightweight Matplotlib block-style approach.
+   - This is easier to run in CI/headless contexts and aligns with existing plotting dependencies.
 
-### `src/fiabilipym/voter.py`
-- Replaced `xrange(...)` with `range(...)`.
+## Detailed changes
+### Dependency and packaging updates
+- Removed `pygraphviz` from core dependencies in `pyproject.toml`.
+- Added optional test dependencies:
+  - `[project.optional-dependencies]`
+  - `test = ["pytest>=8.0"]`
 
-Why: `xrange` is Python 2-only.
+### Documentation updates
+- `README.md` now explains Matplotlib-centric visualization usage.
+- Added a minimal Matplotlib block diagram example suitable for local and CI use.
+- Updated test instructions to include optional test extras and both pytest/unittest execution styles.
 
-### `src/fiabilipym/markov.py`
-- Replaced `xrange(...)` with `range(...)` in code and doctest examples.
-- Updated numpy indexing line from `self.matrix[xrange(...), xrange(...)]` to `self.matrix[range(...), range(...)]`.
+### Test strategy updates
+- Graphviz-specific assertions and dependency expectations were removed from the test strategy.
+- Draw-related tests now focus on headless-safe execution of plotting paths.
+- The updated strategy expects draw methods to be verifiable in tests (including return-value checks for Matplotlib `Axes` where applicable).
+- Matplotlib is configured to use the `"Agg"` backend in test contexts for CI/headless compatibility.
 
-Why: `xrange` is Python 2-only; `range` is the Python 3 equivalent and works with numpy indexing.
+### Relevant project areas touched
+This Graphviz-to-Matplotlib transition impacts or is reflected across:
+- Core drawing surfaces and related docs (notably `system.py`, `markov.py`, and `README.md`).
+- Tests under `tests/` that exercise draw paths.
+- Packaging/dependency metadata (`pyproject.toml`, generated metadata files).
+- Demo material/notebooks that present diagram generation workflows.
 
-### `tests/test_system.py`
-- Replaced `dict.iteritems()` with `dict.items()`.
-- Replaced `xrange(...)` with `range(...)`.
-- Migrated to `unittest` instead of `unittest2`.
+## How to test / run examples
+### Install
+```bash
+pip install -e ".[test]"
+```
 
-### `tests/test_markov.py`
-- Replaced `dict.iteritems()` with `dict.items()`.
-- Replaced `xrange(...)` with `range(...)`.
-- Migrated to `unittest` instead of `unittest2`.
+### Run tests (pytest)
+```bash
+pytest -q
+```
 
-Why: `iteritems` and `xrange` are Python 2-only; Python 3 uses `items()` and `range()`.
+### Run tests (unittest discovery)
+```bash
+python -m unittest discover -s tests
+```
 
-## Packaging and structure changes (new)
+### Minimal Matplotlib block-style example
+```python
+import matplotlib
+matplotlib.use("Agg")
 
-- Renamed the importable package to `fiabilipym`.
-- Moved package sources under `src/fiabilipym/`.
-- Moved tests to `tests/` and updated imports to `fiabilipym`.
-- Added modern `pyproject.toml` metadata and a standalone `setup.py`.
-- Declared runtime dependencies: numpy, scipy, sympy, networkx, matplotlib, pygraphviz.
-- Documented Graphviz requirements and uv-based workflows in `README.md`.
+import matplotlib.pyplot as plt
 
-## Notes on behavior
+fig, ax = plt.subplots(figsize=(5, 2))
+ax.plot([0.1, 0.9], [0.5, 0.5], color="black", linewidth=1.5)
+ax.text(0.08, 0.5, "E", va="center", ha="right")
+ax.text(0.92, 0.5, "S", va="center", ha="left")
+ax.add_patch(plt.Rectangle((0.4, 0.4), 0.2, 0.2, fill=False, linewidth=1.5))
+ax.text(0.5, 0.5, "C1", va="center", ha="center")
+ax.set_axis_off()
+fig.tight_layout()
+fig.savefig("minimal_block_diagram.png", dpi=150)
+```
 
-- The computational behavior is unchanged; updates are mechanical and packaging-focused.
-- Visualization continues to rely on matplotlib plus Graphviz layout via `pygraphviz`.
+### Run the existing `System.draw()` flow in headless mode
+```python
+import matplotlib
+matplotlib.use("Agg")
 
-## 2026-01-29: Monte Carlo aging + Weibull distributions + notebook demo
+import matplotlib.pyplot as plt
+from fiabilipym import Component, System
 
-- Added lifetime distribution support with a Weibull implementation (`distribution.py`).
-- Components can now sample failure times, including aging via conditional residual life.
-- Systems and voters expose Monte Carlo simulation (`monte_carlo`, `time_to_failure_sample`).
-- Fixed graph construction to treat string nodes (e.g. `"N1"`) as single nodes.
-- Added `Voter.draw()` for visualization parity with `System.draw()`.
-- Added `fiabilipym_weibull_montecarlo_demo.ipynb` with architectures + plots.
-- Added tests for Monte Carlo behavior, Weibull mean matching, and voter sampling.
-- Exported Weibull helpers at the package root.
+motor = Component("M", 1e-4, 3e-2)
+power = Component("P", 1e-6, 2e-4)
+
+S = System()
+S["E"] = [power]
+S[power] = [motor]
+S[motor] = "S"
+
+S.draw()
+plt.tight_layout()
+plt.savefig("block_diagram.png", dpi=150)
+```
